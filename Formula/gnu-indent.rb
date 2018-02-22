@@ -34,11 +34,45 @@ class GnuIndent < Formula
 
     system "./configure", *args
     system "make", "install"
+
+    if build.without? "default-names"
+      # Binaries not shadowing macOS utils symlinked without 'g' prefix
+      noshadow = %w[indent texinfo2man]
+      noshadow.each do |cmd|
+        bin.install_symlink "g#{cmd}" => cmd
+        man1.install_symlink "g#{cmd}.1" => "#{cmd}.1"
+      end
+
+      # Symlink commands without 'g' prefix into libexec/gnubin and
+      # man pages into libexec/gnuman
+      bin.find.each do |path|
+        next unless File.executable?(path) && !File.directory?(path)
+        cmd = path.basename.to_s.sub(/^g/, "")
+        (libexec/"gnubin").install_symlink bin/"g#{cmd}" => cmd
+        (libexec/"gnuman"/"man1").install_symlink man1/"g#{cmd}" => cmd
+      end
+    end
+  end
+
+  def caveats; <<~EOS
+    All commands have been installed with the prefix 'g'.
+
+    If you really need to use these commands with their normal names, you
+    can add a "gnubin" directory to your PATH from your bashrc like:
+
+        PATH="#{opt_libexec}/gnubin:$PATH"
+
+    Additionally, you can access their man pages with normal names if you add
+    the "gnuman" directory to your MANPATH from your bashrc as well:
+
+        MANPATH="#{opt_libexec}/gnuman:$MANPATH"
+
+    EOS
   end
 
   test do
     (testpath/"test.c").write("int main(){ return 0; }")
-    system "#{bin}/gindent", "test.c"
+    system "##{libexec}/gnubin/indent", "test.c"
     assert_equal File.read("test.c"), <<~EOS
       int
       main ()
@@ -73,4 +107,3 @@ index e7d82e1..c95266f 100644
 -#include <malloc.h>
  #include <string.h>
  #include <ctype.h>
- 
